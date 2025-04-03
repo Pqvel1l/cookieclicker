@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cookie Empire - Инкрементальная игра</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        @keyframes crumb {
+            0% { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+            100% { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(360deg); }
+        }
+        .cookie-pulse {
+            animation: pulse 2s infinite;
+        }
+        .cookie-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        .crumb {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background-color: #f59e0b;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: crumb 0.8s forwards;
+            z-index: 10;
+        }
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .upgrade-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .achievement-locked {
+            filter: grayscale(100%);
+            opacity: 0.7;
+        }
+        .golden-cookie {
+            background: radial-gradient(circle, #fcd34d, #f59e0b);
+            box-shadow: 0 0 30px #f59e0b;
+        }
+        .diamond-cookie {
+            background: radial-gradient(circle, #a5b4fc, #6366f1);
+            box-shadow: 0 0 30px #6366f1;
+        }
+        .event-notification {
+            animation: slideIn 0.5s forwards, slideOut 0.5s forwards 4.5s;
+        }
+        @keyframes slideIn {
+            from { right: -300px; }
+            to { right: 20px; }
+        }
+        @keyframes slideOut {
+            from { right: 20px; }
+            to { right: -300px; }
+        }
+        .achievement-card {
+            margin-bottom: 8px;
+        }
+        .tab-indicator {
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            height: 3px;
+            background-color: #f59e0b;
+            transition: all 0.3s ease;
+        }
+        .settings-dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 5px;
+            min-width: 160px;
+            z-index: 1000;
+        }
+        .settings-container:hover .settings-dropdown {
+            display: block;
+        }
+        .event-progress {
+            height: 4px;
+            background-color: rgba(255,255,255,0.3);
+            margin-top: 4px;
+        }
+        .event-progress-bar {
+            height: 100%;
+            background-color: white;
+            transition: width 0.1s linear;
+        }
+        .level-indicator {
+            transition: all 0.3s ease;
+            }
+
+            @keyframes pulse-gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+            }
+
+            .animate-pulse {
+            animation: pulse-gradient 2s ease infinite;
+            background-size: 200% 200%;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200 min-h-screen transition-colors duration-300">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-amber-600">Cookie Empire</h1>
+            <div class="flex items-center space-x-4">
+                <button id="theme-toggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700">
+                    <i class="fas fa-moon dark:hidden"></i>
+                    <i class="fas fa-sun hidden dark:block"></i>
+                </button>
+                <div class="relative settings-container">
+                    <button id="settings-btn" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <div class="settings-dropdown bg-white dark:bg-gray-800 rounded-md shadow-lg">
+                        <div class="p-2">
+                            <button id="save-btn" class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                                <i class="fas fa-save mr-2"></i> Сохранить
+                            </button>
+                            <button id="reset-btn" class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                                <i class="fas fa-trash mr-2"></i> Сбросить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Player Stats -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="text-xl font-semibold" id="player-name">Игрок</h2>
+                    <div class="flex items-center mt-2">
+                        <span class="text-2xl font-bold mr-2" id="cookies-count">0</span>
+                        <span class="text-amber-600">🍪</span>
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        <span id="cookies-per-second">0</span> 🍪/сек
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Event Notification -->
+            <div id="event-notification" class="mt-3 bg-green-500 text-white px-3 py-2 rounded-lg hidden">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h4 class="font-bold text-sm" id="event-title">Событие!</h4>
+                        <p class="text-xs" id="event-description">Описание события</p>
+                    </div>
+                    <div class="w-24 ml-2 event-progress rounded-full">
+                        <div id="event-progress-bar" class="event-progress-bar rounded-full"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Game Area -->
+        <div class="flex flex-col md:flex-row gap-6">
+            <!-- Cookie Clicker -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 flex-1 flex flex-col items-center">
+                <div class="text-center mb-4">
+                    <p class="text-gray-600 dark:text-gray-300">Баланс: <span class="font-medium" id="cookie-balance">0</span> 🍪</p>
+                </div>
+                <div class="relative mb-4">
+                    <button id="cookie-btn" class="w-48 h-48 rounded-full bg-amber-200 shadow-lg flex items-center justify-center text-6xl cursor-pointer hover:scale-105 transition-transform duration-200 cookie-pulse">
+                        🍪
+                    </button>
+                    <div id="click-effect" class="absolute inset-0 pointer-events-none flex items-center justify-center" style="top: 20px;"></div>
+                </div>
+                <div class="text-center">
+                    <p class="text-amber-600 font-semibold">+<span id="cookies-per-click">1</span> 🍪 за клик</p>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex-1">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+                    <!-- Tab Buttons -->
+                    <div class="flex border-b border-gray-200 dark:border-gray-700 relative">
+                        <div class="tab-indicator" style="width: 25%; transform: translateX(0%);"></div>
+                        <button class="tab-btn py-3 px-4 font-medium text-sm flex-1 text-center hover:bg-gray-100 dark:hover:bg-gray-700 active" data-tab="upgrades">
+                            <i class="fas fa-arrow-up mr-2"></i>Улучшения
+                        </button>
+                        <button class="tab-btn py-3 px-4 font-medium text-sm flex-1 text-center hover:bg-gray-100 dark:hover:bg-gray-700" data-tab="achievements">
+                            <i class="fas fa-trophy mr-2"></i>Достижения
+                        </button>
+                        <button class="tab-btn py-3 px-4 font-medium text-sm flex-1 text-center hover:bg-gray-100 dark:hover:bg-gray-700" data-tab="prestige">
+                            <i class="fas fa-star mr-2"></i>Престиж
+                        </button>
+                        <button class="tab-btn py-3 px-4 font-medium text-sm flex-1 text-center hover:bg-gray-100 dark:hover:bg-gray-700" data-tab="stats">
+                            <i class="fas fa-chart-bar mr-2"></i>Статистика
+                        </button>
+                    </div>
+
+                    <!-- Tab Contents -->
+                    <div class="p-4">
+                        <!-- Upgrades Tab -->
+                        <div id="upgrades-tab" class="tab-content active">
+                            <div class="flex mb-4 relative">
+                                <div class="type-indicator absolute bottom-0 h-0.5 bg-amber-500 transition-all duration-300" style="width: 50%; left: 0%;"></div>
+                                <button class="upgrade-type-btn flex-1 py-2 font-medium" data-type="click">Доход за клик</button>
+                                <button class="upgrade-type-btn flex-1 py-2 font-medium" data-type="auto">Пассивный доход</button>
+                            </div>
+                            <div id="click-upgrades" class="space-y-3">
+                                <!-- Click upgrades will be added here by JavaScript -->
+                            </div>
+                            <div id="auto-upgrades" class="space-y-3 hidden">
+                                <!-- Auto upgrades will be added here by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Achievements Tab -->
+                        <div id="achievements-tab" class="tab-content">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <!-- Achievements will be added here by JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Prestige Tab -->
+                        <div id="prestige-tab" class="tab-content">
+                            <div class="bg-amber-50 dark:bg-gray-700 rounded-lg p-4 mb-4">
+                                <h3 class="font-bold text-lg text-amber-800 dark:text-amber-300 mb-2">Престиж</h3>
+                                <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                                    Сбросьте свой прогресс, чтобы получить престижные очки и постоянные бонусы!
+                                </p>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span>Текущие престижные очки:</span>
+                                    <span class="font-bold text-amber-600" id="prestige-points">0</span>
+                                </div>
+                                <div class="flex items-center justify-between mb-4">
+                                    <span>Бонус за престиж:</span>
+                                    <span class="font-bold text-amber-600" id="prestige-bonus">+0%</span>
+                                </div>
+                                <button id="prestige-btn" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    Престиж (доступно при 1T! 🍪)
+                                </button>
+                            </div>
+                            <div>
+                                <h4 class="font-bold mb-2">Престижные улучшения</h4>
+                                <div class="space-y-2">
+                                    <!-- Prestige upgrades will be added here by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stats Tab -->
+                        <div id="stats-tab" class="tab-content">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                    <h4 class="font-bold mb-3">Основная статистика</h4>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between">
+                                            <span>Всего печенек:</span>
+                                            <span id="total-cookies">0</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span>Всего кликов:</span>
+                                            <span id="stats-total-clicks">0</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span>Кликов в секунду:</span>
+                                            <span id="clicks-per-second">0</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span>Время игры:</span>
+                                            <span id="play-time">0:00:00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                    <h4 class="font-bold mb-3">Рекорды</h4>
+                                    <div class="space-y-2">
+                                        <div class="flex justify-between">
+                                            <span>Макс. печенек:</span>
+                                            <span id="max-cookies">0</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span>Макс. доход:</span>
+                                            <span id="max-cps">0</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span>Престижей:</span>
+                                            <span id="total-prestiges">0</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span>Достижений:</span>
+                                            <span id="achievements-unlocked">0</span>/20
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Name Modal -->
+        <div id="name-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+                <h2 class="text-xl font-bold mb-4">Введите ваше имя</h2>
+                <input type="text" id="player-name-input" class="w-full px-4 py-2 border rounded-lg mb-4 dark:bg-gray-700 dark:border-gray-600" placeholder="Имя игрока">
+                <button id="confirm-name-btn" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
+                    Начать игру
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game State
+        const gameState = {
+            cookies: 0,
+            totalCookies: 0,
+            cookiesPerClick: 1,
+            cookiesPerSecond: 0,
+            totalClicks: 0,
+            clickUpgrades: [
+                { id: 1, name: "Улучшенные пальцы", level: 0, baseCost: 10, effect: 1, description: "Увеличивает количество печенек за клик" },
+                { id: 2, name: "Двойной клик", level: 0, baseCost: 1000, effect: 2, description: "Удваивает эффективность кликов" },
+                // { id: 3, name: "Золотые пальцы", level: 0, baseCost: 500, effect: 5, description: "Клики приносят больше печенек" },
+                { id: 4, name: "Платиновые клики", level: 0, baseCost: 5000, effect: 10, description: "Значительно увеличивает доход от кликов" },
+                { id: 5, name: "Квантовые клики", level: 0, baseCost: 100000, effect: 25, description: "Использует квантовую механику для кликов" },
+                // { id: 6, name: "Клики бога", level: 0, baseCost: 50000, effect: 50, description: "Клики божественной силы" },
+                // { id: 7, name: "Волшебные клики", level: 0, baseCost: 200000, effect: 100, description: "Магически увеличивает доход от кликов" },
+                { id: 8, name: "Клики вселенной", level: 0, baseCost: 5000000, effect: 250, description: "Клики космической силы" },
+                // { id: 9, name: "Бесконечные клики", level: 0, baseCost: 5000000, effect: 500, description: "Клики бесконечной мощности" },
+                { id: 10, name: "Абсолютные клики", level: 0, baseCost: 75000000, effect: 1000, description: "Максимально возможные клики" }
+            ],
+            autoUpgrades: [
+                { id: 1, name: "Бабушка", level: 0, baseCost: 50, effect: 0.5, description: "Бабушка печёт печенье для вас" },
+                { id: 2, name: "Пекарня", level: 0, baseCost: 500, effect: 2, description: "Маленькая пекарня производит печенье" },
+                { id: 3, name: "Фабрика", level: 0, baseCost: 1000, effect: 10, description: "Большая фабрика по производству печенья" },
+                { id: 4, name: "Завод", level: 0, baseCost: 10000, effect: 50, description: "Огромный завод производит печенье" },
+                { id: 5, name: "Гигафабрика", level: 0, baseCost: 50000, effect: 200, description: "Гигантская фабрика мирового масштаба" },
+                { id: 6, name: "Планета печенья", level: 0, baseCost: 250000, effect: 1000, description: "Целая планета, производящая печенье" },
+                { id: 7, name: "Солнечная система", level: 0, baseCost: 1500000, effect: 5000, description: "Солнечная система печёт для вас" },
+                { id: 8, name: "Галактика", level: 0, baseCost: 10000000, effect: 25000, description: "Целая галактика производит печенье" },
+                { id: 9, name: "Вселенная", level: 0, baseCost: 75000000, effect: 100000, description: "Вся вселенная работает на ваше печенье" },
+                { id: 10, name: "Мультивселенная", level: 0, baseCost: 5000000000, effect: 5000000, description: "Параллельные вселенные производят печенье" }
+            ],
+            achievements: [
+                { id: 1, name: "Первое печенье", description: "Соберите 1 печенье", goal: 1, unlocked: false, bonus: 0.01 },
+                { id: 2, name: "Начинающий пекарь", description: "Соберите 10 печений", goal: 10, unlocked: false, bonus: 0.02 },
+                { id: 3, name: "Любитель печенья", description: "Соберите 100 печений", goal: 100, unlocked: false, bonus: 0.05 },
+                { id: 4, name: "Опытный пекарь", description: "Соберите 1,000 печений", goal: 1000, unlocked: false, bonus: 0.1 },
+                { id: 5, name: "Мастер печенья", description: "Соберите 10,000 печений", goal: 10000, unlocked: false, bonus: 0.2 },
+                { id: 6, name: "Легенда печенья", description: "Соберите 100,000 печений", goal: 100000, unlocked: false, bonus: 0.5 },
+                { id: 7, name: "Бог печенья", description: "Соберите 1,000,000 печений", goal: 1000000, unlocked: false, bonus: 1 },
+                { id: 8, name: "Первые клики", description: "Сделайте 10 кликов", goal: 10, unlocked: false, bonus: 0.01 },
+                { id: 9, name: "Усердный кликер", description: "Сделайте 100 кликов", goal: 100, unlocked: false, bonus: 0.02 },
+                { id: 10, name: "Машина для кликов", description: "Сделайте 500 кликов", goal: 500, unlocked: false, bonus: 0.05 },
+                { id: 11, name: "Кликер-профи", description: "Сделайте 1,000 кликов", goal: 1000, unlocked: false, bonus: 0.1 },
+                { id: 12, name: "Неутомимый кликер", description: "Сделайте 5,000 кликов", goal: 5000, unlocked: false, bonus: 0.2 },
+                { id: 13, name: "Король кликов", description: "Сделайте 10,000 кликов", goal: 10000, unlocked: false, bonus: 0.5 },
+                { id: 14, name: "Первое улучшение", description: "Купите 1 улучшение", goal: 1, unlocked: false, bonus: 0.01 },
+                { id: 15, name: "Коллекционер", description: "Купите 5 улучшений", goal: 5, unlocked: false, bonus: 0.05 },
+                { id: 16, name: "Инвестор", description: "Купите 10 улучшений", goal: 10, unlocked: false, bonus: 0.1 },
+                { id: 17, name: "Оптимизатор", description: "Купите 20 улучшений", goal: 20, unlocked: false, bonus: 0.2 },
+                { id: 18, name: "Первая автоматизация", description: "Купите автоматическое улучшение", goal: 1, unlocked: false, bonus: 0.05 },
+                { id: 19, name: "Автоматизатор", description: "Купите 5 автоматических улучшений", goal: 5, unlocked: false, bonus: 0.1 },
+                { id: 20, name: "Первый престиж", description: "Выполните престиж", goal: 1, unlocked: false, bonus: 0.5 }
+            ],
+            prestigePoints: 0,
+            prestigeBonus: 0,
+            prestigeUpgrades: [
+                { id: 1, name: "Улучшенный старт", description: "Начинайте с +1 печенья за клик", cost: 1, purchased: false },
+                { id: 2, name: "Двойной доход", description: "+100% к автоматическому доходу", cost: 5, purchased: false },
+                { id: 3, name: "Золотые клики", description: "+50% к эффективности кликов", cost: 10, purchased: false },
+                { id: 4, name: "Пекарня мечты", description: "Автоматический доход x2", cost: 25, purchased: false },
+                { id: 5, name: "Бесконечное печенье", description: "Все доходы x3", cost: 50, purchased: false }
+            ],
+            maxCookies: 0,
+            maxCPS: 0,
+            playTime: 0,
+            lastUpdate: Date.now(),
+            playerName: "Игрок",
+            cookiesMultiplier: 1,
+            clickMultiplier: 1,
+            activeEvent: null,
+            eventEndTime: 0,
+            totalPrestiges: 0,
+            unlockedAchievements: 0,
+            clicksPerSecond: 0,
+            lastClicks: 0,
+            lastClickTime: Date.now()
+        };
+
+        // DOM Elements
+        const elements = {
+            cookieBtn: document.getElementById('cookie-btn'),
+            cookiesCount: document.getElementById('cookies-count'),
+            cookieBalance: document.getElementById('cookie-balance'),
+            cookiesPerClick: document.getElementById('cookies-per-click'),
+            cookiesPerSecond: document.getElementById('cookies-per-second'),
+            totalClicks: document.getElementById('stats-total-clicks'),
+            clickUpgrades: document.getElementById('click-upgrades'),
+            autoUpgrades: document.getElementById('auto-upgrades'),
+            achievementsTab: document.getElementById('achievements-tab'),
+            prestigePoints: document.getElementById('prestige-points'),
+            prestigeBonus: document.getElementById('prestige-bonus'),
+            prestigeBtn: document.getElementById('prestige-btn'),
+            playerName: document.getElementById('player-name'),
+            playerNameInput: document.getElementById('player-name-input'),
+            nameModal: document.getElementById('name-modal'),
+            confirmNameBtn: document.getElementById('confirm-name-btn'),
+            clickEffect: document.getElementById('click-effect'),
+            tabButtons: document.querySelectorAll('.tab-btn'),
+            tabContents: {
+                upgrades: document.getElementById('upgrades-tab'),
+                achievements: document.getElementById('achievements-tab'),
+                prestige: document.getElementById('prestige-tab'),
+                stats: document.getElementById('stats-tab')
+            },
+            upgradeTypeButtons: document.querySelectorAll('.upgrade-type-btn'),
+            upgradeContents: {
+                click: document.getElementById('click-upgrades'),
+                auto: document.getElementById('auto-upgrades')
+            },
+            themeToggle: document.getElementById('theme-toggle'),
+            saveBtn: document.getElementById('save-btn'),
+            resetBtn: document.getElementById('reset-btn'),
+            eventNotification: document.getElementById('event-notification'),
+            eventTitle: document.getElementById('event-title'),
+            eventDescription: document.getElementById('event-description'),
+            eventProgressBar: document.getElementById('event-progress-bar'),
+            totalCookies: document.getElementById('total-cookies'),
+            statsTotalClicks: document.getElementById('stats-total-clicks'),
+            maxCookies: document.getElementById('max-cookies'),
+            maxCPS: document.getElementById('max-cps'),
+            playTime: document.getElementById('play-time'),
+            achievementsUnlocked: document.getElementById('achievements-unlocked'),
+            totalPrestiges: document.getElementById('total-prestiges'),
+            clicksPerSecond: document.getElementById('clicks-per-second'),
+            tabIndicator: document.querySelector('.tab-indicator'),
+            typeIndicator: document.querySelector('.type-indicator')
+        };
+// Принудительно добавить печеньки
+function addCookies(amount) {
+    gameState.cookies += amount;
+    renderAll();
+    console.log(`Added ${amount} cookies. Total: ${gameState.cookies}`);
+}
+
+// Проверить стоимость улучшения
+function getUpgradeCost(type, id) {
+    const upgrade = type === 'click' 
+        ? gameState.clickUpgrades.find(u => u.id === id)
+        : gameState.autoUpgrades.find(u => u.id === id);
+    return calculateUpgradeCost(upgrade);
+}
+        // Game Events
+        const events = [
+            {
+                name: "Волна кофе",
+                description: "+50% к эффективности кликов на 30 секунд",
+                duration: 30000,
+                effect: () => { gameState.clickMultiplier *= 1.5; },
+                endEffect: () => { gameState.clickMultiplier /= 1.5; }
+            },
+            {
+                name: "Сахарный бум",
+                description: "+100% к производству печенья на 20 секунд",
+                duration: 20000,
+                effect: () => { gameState.cookiesMultiplier *= 2; },
+                endEffect: () => { gameState.cookiesMultiplier /= 2; }
+            },
+            {
+                name: "Золотое печенье",
+                description: "Получайте в 3 раза больше печенья за клики на 15 секунд",
+                duration: 15000,
+                effect: () => { gameState.clickMultiplier *= 3; },
+                endEffect: () => { gameState.clickMultiplier /= 3; }
+            },
+            {
+                name: "Фабричный бум",
+                description: "Автоматическое производство x2 на 25 секунд",
+                duration: 25000,
+                effect: () => { gameState.cookiesMultiplier *= 2; },
+                endEffect: () => { gameState.cookiesMultiplier /= 2; }
+            }
+        ];
+
+        // Initialize the game
+        function initGame() {
+            loadGame();
+            renderAll();
+            setupEventListeners();
+            startGameLoop();
+            
+            // Show name modal if player name is not set
+            if (!localStorage.getItem('cookieEmpirePlayerName')) {
+                elements.nameModal.classList.remove('hidden');
+            }
+        }
+
+        // Set up event listeners
+        function setupEventListeners() {
+            // Cookie click
+            elements.cookieBtn.addEventListener('click', handleCookieClick);
+            
+            // Tab switching
+            elements.tabButtons.forEach((btn, index) => {
+                btn.addEventListener('click', () => {
+                    elements.tabButtons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    // Move tab indicator
+                    elements.tabIndicator.style.transform = `translateX(${index * 100}%)`;
+                    
+                    Object.values(elements.tabContents).forEach(content => content.classList.remove('active'));
+                    const tabId = btn.getAttribute('data-tab') + '-tab';
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+            
+            // Upgrade type switching
+            elements.upgradeTypeButtons.forEach((btn, index) => {
+                btn.addEventListener('click', () => {
+                    elements.upgradeTypeButtons.forEach(b => b.classList.remove('border-amber-500'));
+                    
+                    // Move type indicator
+                    elements.typeIndicator.style.left = `${index * 50}%`;
+                    
+                    Object.values(elements.upgradeContents).forEach(content => content.classList.add('hidden'));
+                    const type = btn.getAttribute('data-type');
+                    elements.upgradeContents[type].classList.remove('hidden');
+                });
+            });
+            
+            // Name modal
+            elements.confirmNameBtn.addEventListener('click', () => {
+                const name = elements.playerNameInput.value.trim();
+                if (name) {
+                    gameState.playerName = name;
+                    elements.playerName.textContent = name;
+                    localStorage.setItem('cookieEmpirePlayerName', name);
+                    elements.nameModal.classList.add('hidden');
+                }
+            });
+            
+            // Theme toggle
+            elements.themeToggle.addEventListener('click', toggleTheme);
+            
+            // Save/Reset buttons
+            elements.saveBtn.addEventListener('click', saveGame);
+            elements.resetBtn.addEventListener('click', resetGame);
+            
+            // Prestige button
+            elements.prestigeBtn.addEventListener('click', performPrestige);
+        }
+
+        // Game loop
+        function startGameLoop() {
+            setInterval(updateGame, 100);
+            setInterval(checkAchievements, 1000);
+            setInterval(updateCPS, 1000);
+            setInterval(maybeTriggerEvent, 60000); // Check for events every minute
+            setInterval(updateEventProgress, 100); // Update event progress bar
+        }
+
+        // Update game state
+        function updateGame() {
+            const now = Date.now();
+            const deltaTime = (now - gameState.lastUpdate) / 1000;
+            gameState.lastUpdate = now;
+            
+            // Update cookies from auto production
+            if (gameState.cookiesPerSecond > 0) {
+                const cookiesEarned = gameState.cookiesPerSecond * deltaTime * gameState.cookiesMultiplier;
+                gameState.cookies += cookiesEarned;
+                gameState.totalCookies += cookiesEarned;
+                
+                // Update max cookies
+                if (gameState.cookies > gameState.maxCookies) {
+                    gameState.maxCookies = gameState.cookies;
+                }
+            }
+            
+            // Update play time
+            gameState.playTime += deltaTime;
+            
+            // Update max CPS
+            const currentCPS = gameState.cookiesPerSecond * gameState.cookiesMultiplier;
+            if (currentCPS > gameState.maxCPS) {
+                gameState.maxCPS = currentCPS;
+            }
+            
+            // Check active event
+            if (gameState.activeEvent && now >= gameState.eventEndTime) {
+                gameState.activeEvent.endEffect();
+                gameState.activeEvent = null;
+                elements.eventNotification.classList.add('hidden');
+            }
+            
+            // Update prestige button state
+            elements.prestigeBtn.disabled = gameState.cookies < 1000000000000; // 1000B cookies for prestige
+            
+            renderGameStats();
+        }
+
+        // Update event progress bar
+        function updateEventProgress() {
+            if (gameState.activeEvent) {
+                const now = Date.now();
+                const timeLeft = gameState.eventEndTime - now;
+                const progress = (timeLeft / gameState.activeEvent.duration) * 100;
+                
+                elements.eventProgressBar.style.width = `${progress}%`;
+            }
+        }
+
+        // Update clicks per second
+        function updateCPS() {
+            const now = Date.now();
+            const timeDiff = (now - gameState.lastClickTime) / 1000;
+            
+            if (timeDiff > 0) {
+                const clicksDiff = gameState.totalClicks - gameState.lastClicks;
+                gameState.clicksPerSecond = clicksDiff / timeDiff;
+                gameState.lastClicks = gameState.totalClicks;
+                gameState.lastClickTime = now;
+            }
+        }
+
+        // Handle cookie click
+        function handleCookieClick() {
+    const earned = gameState.cookiesPerClick * gameState.clickMultiplier;
+    gameState.cookies += earned;
+    gameState.totalCookies += earned;
+    gameState.totalClicks++;
+    createCrumbEffect();
+    // Важное добавление - принудительное обновление:
+    renderGameStats();
+    renderUpgrades(); // <- Это критически важно!
+
+  
+}
+
+        // Create crumb effect animation
+        function createCrumbEffect() {
+            const crumb = document.createElement('div');
+            crumb.className = 'crumb';
+            
+            // Random position around the cookie
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 15 + Math.random() * 15;
+            const tx = Math.cos(angle) * distance;
+            const ty = Math.sin(angle) * distance;
+            
+            crumb.style.setProperty('--tx', `${tx}px`);
+            crumb.style.setProperty('--ty', `${ty}px`);
+            
+            // Random position near the center
+            const centerX = elements.cookieBtn.offsetWidth / 2;
+            const centerY = elements.cookieBtn.offsetHeight / 2;
+            crumb.style.left = `${centerX}px`;
+            crumb.style.top = `${centerY}px`;
+            
+            elements.clickEffect.appendChild(crumb);
+            
+            // Remove crumb after animation
+            setTimeout(() => {
+                crumb.remove();
+            }, 800);
+        }
+
+        // Buy upgrade
+        function buyUpgrade(type, id) {
+    const upgrade = type === 'click' ? 
+        gameState.clickUpgrades.find(u => u.id === id) : 
+        gameState.autoUpgrades.find(u => u.id === id);
+        
+    const cost = Math.floor(upgrade.baseCost * Math.pow(1.8, upgrade.level));
+    
+    // Проверяем максимальный уровень
+    if (upgrade.level >= 10) return;
+    
+    if (gameState.cookies >= cost) {
+        gameState.cookies -= cost;
+        upgrade.level++;
+        
+        if (type === 'click') {
+            gameState.cookiesPerClick = gameState.clickUpgrades.reduce((sum, u) => sum + u.level * u.effect, 1) * gameState.clickMultiplier;
+        } else {
+            gameState.cookiesPerSecond = gameState.autoUpgrades.reduce((sum, u) => sum + u.level * u.effect, 0) * (1 + gameState.prestigeBonus / 100);
+        }
+        
+        renderUpgrades();
+        renderGameStats();
+        checkAchievements();
+    }
+}
+
+        // Check achievements
+        function checkAchievements() {
+            gameState.achievements.forEach(ach => {
+                if (!ach.unlocked) {
+                    let conditionMet = false;
+                    
+                    if (ach.id <= 7) {
+                        conditionMet = gameState.totalCookies >= ach.goal;
+                    } else if (ach.id <= 13) {
+                        conditionMet = gameState.totalClicks >= ach.goal;
+                    } else if (ach.id <= 17) {
+                        const totalUpgrades = gameState.clickUpgrades.reduce((sum, u) => sum + u.level, 0) + 
+                                             gameState.autoUpgrades.reduce((sum, u) => sum + u.level, 0);
+                        conditionMet = totalUpgrades >= ach.goal;
+                    } else if (ach.id <= 19) {
+                        const autoUpgrades = gameState.autoUpgrades.reduce((sum, u) => sum + u.level, 0);
+                        conditionMet = autoUpgrades >= ach.goal;
+                    } else if (ach.id === 20) {
+                        conditionMet = gameState.totalPrestiges >= ach.goal;
+                    }
+                    
+                    if (conditionMet) {
+                        ach.unlocked = true;
+                        gameState.unlockedAchievements++;
+                        
+                        // Apply bonus
+                        if (ach.id <= 7) {
+                            gameState.cookiesMultiplier += ach.bonus;
+                        } else if (ach.id <= 13) {
+                            gameState.clickMultiplier += ach.bonus;
+                        } else {
+                            gameState.cookiesMultiplier += ach.bonus;
+                        }
+                        
+                        // Update cookie appearance based on achievements
+                        updateCookieAppearance();
+                        
+                        // Show achievement notification
+                        showEventNotification(`Достижение: ${ach.name}`, ach.description);
+                    }
+                }
+            });
+            
+            renderAchievements();
+        }
+
+        // Update cookie appearance based on achievements
+        function updateCookieAppearance() {
+            const cookieBtn = elements.cookieBtn;
+            cookieBtn.classList.remove('golden-cookie', 'diamond-cookie');
+            
+            if (gameState.unlockedAchievements >= 10) {
+                cookieBtn.classList.add('golden-cookie');
+            }
+            if (gameState.unlockedAchievements >= 15) {
+                cookieBtn.classList.add('diamond-cookie');
+            }
+        }
+
+        // Maybe trigger a random event
+        function maybeTriggerEvent() {
+            if (!gameState.activeEvent && Math.random() < 0.3) { // 30% chance for event
+                const event = events[Math.floor(Math.random() * events.length)];
+                gameState.activeEvent = event;
+                gameState.eventEndTime = Date.now() + event.duration;
+                event.effect();
+                
+                showEventNotification(event.name, event.description);
+            }
+        }
+
+        // Show event notification
+        function showEventNotification(title, description) {
+            elements.eventTitle.textContent = title;
+            elements.eventDescription.textContent = description;
+            elements.eventNotification.classList.remove('hidden');
+            
+            setTimeout(() => {
+                if (gameState.activeEvent === null) {
+                    elements.eventNotification.classList.add('hidden');
+                }
+            }, 5000);
+        }
+
+        // Perform prestige
+        function performPrestige() {
+            if (gameState.cookies >= 10000000000) { // 10B cookies
+                // Calculate prestige points (1 point per 10B cookies)
+                const pointsEarned = Math.floor(gameState.cookies / 10000000000);
+                gameState.prestigePoints += pointsEarned;
+                gameState.totalPrestiges++;
+                
+                // Reset game state (keep prestige upgrades and achievements)
+                gameState.cookies = 0;
+                gameState.cookiesPerClick = 1;
+                gameState.cookiesPerSecond = 0;
+                gameState.clickUpgrades.forEach(u => u.level = 0);
+                gameState.autoUpgrades.forEach(u => u.level = 0);
+                gameState.cookiesMultiplier = 1;
+                gameState.clickMultiplier = 1;
+                gameState.activeEvent = null;
+                
+                // Apply prestige bonus from purchased upgrades
+                gameState.prestigeBonus = 0;
+                gameState.prestigeUpgrades.forEach(upgrade => {
+                    if (upgrade.purchased) {
+                        if (upgrade.id === 1) gameState.cookiesPerClick += 1;
+                        if (upgrade.id === 2) gameState.prestigeBonus += 100;
+                        if (upgrade.id === 3) gameState.clickMultiplier += 0.5;
+                        if (upgrade.id === 4) gameState.cookiesMultiplier *= 2;
+                        if (upgrade.id === 5) {
+                            gameState.cookiesMultiplier *= 3;
+                            gameState.clickMultiplier *= 3;
+                        }
+                    }
+                });
+                
+                // Check for prestige achievement
+                checkAchievements();
+                
+                renderAll();
+                saveGame();
+            }
+        }
+
+        // Buy prestige upgrade
+        function buyPrestigeUpgrade(id) {
+            const upgrade = gameState.prestigeUpgrades.find(u => u.id === id);
+            
+            if (!upgrade.purchased && gameState.prestigePoints >= upgrade.cost) {
+                gameState.prestigePoints -= upgrade.cost;
+                upgrade.purchased = true;
+                
+                // Immediate effect for some upgrades
+                if (upgrade.id === 1) gameState.cookiesPerClick += 1;
+                if (upgrade.id === 3) gameState.clickMultiplier += 0.5;
+                if (upgrade.id === 4) gameState.cookiesMultiplier *= 2;
+                if (upgrade.id === 5) {
+                    gameState.cookiesMultiplier *= 3;
+                    gameState.clickMultiplier *= 3;
+                }
+                
+                renderPrestige();
+                renderGameStats();
+                saveGame();
+            }
+        }
+
+        // Toggle theme
+        function toggleTheme() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('cookieEmpireTheme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('cookieEmpireTheme', 'dark');
+            }
+        }
+
+        // Save game
+        function saveGame() {
+            const saveData = {
+                cookies: gameState.cookies,
+                totalCookies: gameState.totalCookies,
+                clickUpgrades: gameState.clickUpgrades,
+                autoUpgrades: gameState.autoUpgrades,
+                achievements: gameState.achievements,
+                prestigePoints: gameState.prestigePoints,
+                prestigeUpgrades: gameState.prestigeUpgrades,
+                maxCookies: gameState.maxCookies,
+                maxCPS: gameState.maxCPS,
+                playTime: gameState.playTime,
+                playerName: gameState.playerName,
+                cookiesMultiplier: gameState.cookiesMultiplier,
+                clickMultiplier: gameState.clickMultiplier,
+                totalPrestiges: gameState.totalPrestiges,
+                unlockedAchievements: gameState.unlockedAchievements,
+                totalClicks: gameState.totalClicks,
+                lastClicks: gameState.lastClicks,
+                lastClickTime: gameState.lastClickTime
+            };
+            
+            localStorage.setItem('cookieEmpireSave', JSON.stringify(saveData));
+            localStorage.setItem('cookieEmpirePlayerName', gameState.playerName);
+            
+            // Show save notification
+            showEventNotification("Игра сохранена", "Ваш прогресс был успешно сохранён");
+        }
+
+        // Load game
+        function loadGame() {
+            const saveData = localStorage.getItem('cookieEmpireSave');
+            const playerName = localStorage.getItem('cookieEmpirePlayerName');
+            const theme = localStorage.getItem('cookieEmpireTheme');
+            
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+            
+            if (playerName) {
+                gameState.playerName = playerName;
+                elements.playerName.textContent = playerName;
+            }
+            
+            if (saveData) {
+                try {
+                    const parsed = JSON.parse(saveData);
+                    
+                    gameState.cookies = parsed.cookies || 0;
+                    gameState.totalCookies = parsed.totalCookies || 0;
+                    gameState.clickUpgrades = parsed.clickUpgrades || gameState.clickUpgrades;
+                    gameState.autoUpgrades = parsed.autoUpgrades || gameState.autoUpgrades;
+                    gameState.achievements = parsed.achievements || gameState.achievements;
+                    gameState.prestigePoints = parsed.prestigePoints || 0;
+                    gameState.prestigeUpgrades = parsed.prestigeUpgrades || gameState.prestigeUpgrades;
+                    gameState.maxCookies = parsed.maxCookies || 0;
+                    gameState.maxCPS = parsed.maxCPS || 0;
+                    gameState.playTime = parsed.playTime || 0;
+                    gameState.playerName = parsed.playerName || "Игрок";
+                    gameState.cookiesMultiplier = parsed.cookiesMultiplier || 1;
+                    gameState.clickMultiplier = parsed.clickMultiplier || 1;
+                    gameState.totalPrestiges = parsed.totalPrestiges || 0;
+                    gameState.unlockedAchievements = parsed.unlockedAchievements || 0;
+                    gameState.totalClicks = parsed.totalClicks || 0;
+                    gameState.lastClicks = parsed.lastClicks || 0;
+                    gameState.lastClickTime = parsed.lastClickTime || Date.now();
+                    
+                    // Recalculate derived values
+                    gameState.cookiesPerClick = gameState.clickUpgrades.reduce((sum, u) => sum + u.level * u.effect, 1) * gameState.clickMultiplier;
+                    gameState.cookiesPerSecond = gameState.autoUpgrades.reduce((sum, u) => sum + u.level * u.effect, 0) * (1 + gameState.prestigeBonus / 100);
+                    
+                    // Update cookie appearance
+                    updateCookieAppearance();
+                    
+                } catch (e) {
+                    console.error("Error loading save:", e);
+                }
+            }
+        }
+
+        // Reset game
+        function resetGame() {
+            if (confirm("Вы уверены, что хотите сбросить весь прогресс? Это действие нельзя отменить.")) {
+                localStorage.removeItem('cookieEmpireSave');
+                
+                // Reset game state
+                gameState.cookies = 0;
+                gameState.totalCookies = 0;
+                gameState.cookiesPerClick = 1;
+                gameState.cookiesPerSecond = 0;
+                gameState.clickUpgrades.forEach(u => u.level = 0);
+                gameState.autoUpgrades.forEach(u => u.level = 0);
+                gameState.achievements.forEach(a => a.unlocked = false);
+                gameState.prestigePoints = 0;
+                gameState.prestigeUpgrades.forEach(u => u.purchased = false);
+                gameState.maxCookies = 0;
+                gameState.maxCPS = 0;
+                gameState.playTime = 0;
+                gameState.cookiesMultiplier = 1;
+                gameState.clickMultiplier = 1;
+                gameState.activeEvent = null;
+                gameState.totalPrestiges = 0;
+                gameState.unlockedAchievements = 0;
+                gameState.totalClicks = 0;
+                gameState.lastClicks = 0;
+                gameState.lastClickTime = Date.now();
+                
+                // Update cookie appearance
+                elements.cookieBtn.classList.remove('golden-cookie', 'diamond-cookie');
+                
+                renderAll();
+                
+                // Show reset notification
+                showEventNotification("Игра сброшена", "Весь прогресс был сброшен");
+            }
+        }
+
+        // Render functions
+        function renderAll() {
+            renderGameStats();
+            renderUpgrades();
+            renderAchievements();
+            renderPrestige();
+        }
+
+        function renderGameStats() {
+            // Format numbers
+            const formatNumber = (num) => {
+                if (num >= 1000000000) return (num / 1000000000000).toFixed(2) + 'T'; 
+                if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
+                if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                return Math.floor(num);
+            };
+            
+            elements.cookiesCount.textContent = formatNumber(gameState.cookies);
+            elements.cookieBalance.textContent = formatNumber(gameState.cookies);
+            elements.cookiesPerClick.textContent = formatNumber(gameState.cookiesPerClick);
+            elements.cookiesPerSecond.textContent = formatNumber(gameState.cookiesPerSecond * gameState.cookiesMultiplier);
+            elements.totalClicks.textContent = formatNumber(gameState.totalClicks);
+            
+            // Stats tab
+            elements.totalCookies.textContent = formatNumber(gameState.totalCookies);
+            elements.statsTotalClicks.textContent = formatNumber(gameState.totalClicks);
+            elements.maxCookies.textContent = formatNumber(gameState.maxCookies);
+            elements.maxCPS.textContent = formatNumber(gameState.maxCPS);
+            elements.totalPrestiges.textContent = formatNumber(gameState.totalPrestiges);
+            elements.achievementsUnlocked.textContent = `${gameState.unlockedAchievements}/20`;
+            elements.clicksPerSecond.textContent = gameState.clicksPerSecond.toFixed(1);
+            
+            // Format play time
+            const hours = Math.floor(gameState.playTime / 3600);
+            const minutes = Math.floor((gameState.playTime % 3600) / 60);
+            const seconds = Math.floor(gameState.playTime % 60);
+            elements.playTime.textContent = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Prestige tab
+            elements.prestigePoints.textContent = formatNumber(gameState.prestigePoints);
+            elements.prestigeBonus.textContent = `+${gameState.prestigeBonus}%`;
+        }
+
+        function renderUpgrades() {
+            // Clear existing upgrades
+            elements.clickUpgrades.innerHTML = '';
+            elements.autoUpgrades.innerHTML = '';
+            
+            // Render click upgrades
+            gameState.clickUpgrades.forEach(upgrade => {
+                const cost = Math.floor(upgrade.baseCost * Math.pow(1.8, upgrade.level));
+                const canAfford = gameState.cookies >= cost;
+                
+                const upgradeEl = document.createElement('div');
+                upgradeEl.className = `upgrade-card bg-white dark:bg-gray-700 rounded-lg p-3 shadow-md relative ${
+                upgrade.level >= 10 ? 'border-2 border-amber-400 cursor-default' : 
+                                    gameState.cookies >= cost ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600' : 'opacity-80'
+                }`;
+
+                upgradeEl.innerHTML = `
+                                    <div class="flex justify-between items-center mb-1">
+                                        <h3 class="font-semibold">${upgrade.name}</h3>
+                                        <span class="text-xs bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 px-2 py-1 rounded">
+                                        +${upgrade.effect * upgrade.level} 🍪/клик
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="flex items-center mb-2">
+                                        <span class="text-sm mr-2">Уровень:</span>
+                                        <span class="level-indicator px-2 py-1 rounded-full text-xs font-bold ${
+                                        upgrade.level >= 10 
+                                            ? 'bg-gradient-to-r from-amber-400 to-amber-600 text-white animate-pulse' 
+                                            : 'bg-gray-200 dark:bg-gray-600'
+                                        }">
+                                        ${upgrade.level}/10 ${upgrade.level >= 10 ? '⭐' : ''}
+                                        </span>
+                                    </div>
+                                    
+                                    <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">${upgrade.description}</p>
+                                    
+                                    <div class="flex justify-between items-center">
+                                        <button class="w-full text-sm font-medium px-3 py-1 rounded ${
+                                        upgrade.level >= 10 
+                                            ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-400 cursor-default' 
+                                            : gameState.cookies >= cost 
+                                            ? 'bg-amber-600 text-white hover:bg-amber-700' 
+                                            : 'bg-gray-200 dark:bg-gray-600 text-gray-500'
+                                        }">
+                                        ${upgrade.level >= 10 ? '🔒 MAX' : `Купить (${formatNumber(cost)} 🍪)`}
+                                        </button>
+                                    </div>
+                                    `;
+                
+                const buyBtn = upgradeEl.querySelector('button');
+                if (canAfford) {
+                    buyBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        buyUpgrade('click', upgrade.id);
+                    });
+                    upgradeEl.addEventListener('click', () => buyUpgrade('click', upgrade.id));
+                }
+                
+                elements.clickUpgrades.appendChild(upgradeEl);
+            });
+            
+            // Render auto upgrades
+            gameState.autoUpgrades.forEach(upgrade => {
+                const cost = Math.floor(upgrade.baseCost * Math.pow(1.8, upgrade.level));
+                const canAfford = gameState.cookies >= cost;
+                const production = upgrade.effect * (1 + gameState.prestigeBonus / 100) * gameState.cookiesMultiplier;
+                
+                const upgradeEl = document.createElement('div');
+                upgradeEl.className = `upgrade-card bg-white dark:bg-gray-700 rounded-lg p-3 shadow-md relative ${
+                upgrade.level >= 10 ? 'border-2 border-green-400 cursor-default' : 
+                    gameState.cookies >= cost ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600' : 'opacity-80'
+                    }`;
+
+                upgradeEl.innerHTML = `
+                                    <div class="flex justify-between items-center mb-1">
+                                        <h3 class="font-semibold">${upgrade.name}</h3>
+                                        <span class="text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 rounded">
+                                        ${formatNumber(upgrade.effect * upgrade.level * (1 + gameState.prestigeBonus/100))} 🍪/сек
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="flex items-center mb-2">
+                                        <span class="text-sm mr-2">Уровень:</span>
+                                        <span class="level-indicator px-2 py-1 rounded-full text-xs font-bold ${
+                                        upgrade.level >= 10 
+                                            ? 'bg-gradient-to-r from-green-400 to-green-600 text-white animate-pulse' 
+                                            : 'bg-gray-200 dark:bg-gray-600'
+                                        }">
+                                        ${upgrade.level}/10 ${upgrade.level >= 10 ? '⭐' : ''}
+                                        </span>
+                                    </div>
+                                    
+                                    <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">${upgrade.description}</p>
+                                    
+                                    <div class="flex justify-between items-center">
+                                        <button class="w-full text-sm font-medium px-3 py-1 rounded ${
+                                        upgrade.level >= 10 
+                                            ? 'bg-green-500/10 text-green-700 dark:text-green-300 border border-green-400 cursor-default' 
+                                            : gameState.cookies >= cost 
+                                            ? 'bg-green-600 text-white hover:bg-green-700' 
+                                            : 'bg-gray-200 dark:bg-gray-600 text-gray-500'
+                                        }">
+                                        ${upgrade.level >= 10 ? '🔒 MAX' : `Купить (${formatNumber(cost)} 🍪)`}
+                                        </button>
+                                    </div>
+                                    `;
+                
+                const buyBtn = upgradeEl.querySelector('button');
+                if (canAfford) {
+                    buyBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        buyUpgrade('auto', upgrade.id);
+                    });
+                    upgradeEl.addEventListener('click', () => buyUpgrade('auto', upgrade.id));
+                }
+                
+                elements.autoUpgrades.appendChild(upgradeEl);
+            });
+        }
+
+        function renderAchievements() {
+            elements.achievementsTab.innerHTML = '';
+            
+            gameState.achievements.forEach(ach => {
+                const achievementEl = document.createElement('div');
+                achievementEl.className = `achievement-card bg-white dark:bg-gray-700 rounded-lg p-3 shadow-md ${ach.unlocked ? '' : 'achievement-locked'}`;
+                
+                achievementEl.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center mr-3 ${ach.unlocked ? 'bg-amber-500 text-white' : 'bg-gray-200 dark:bg-gray-600'}">
+                            <i class="fas ${ach.unlocked ? 'fa-trophy' : 'fa-lock'}"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold">${ach.name}</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-300">${ach.description}</p>
+                            <div class="mt-1 flex justify-between items-center">
+                                <span class="text-xs ${ach.unlocked ? 'text-amber-600' : 'text-gray-500'}">
+                                    ${ach.unlocked ? 'Разблокировано' : `Цель: ${formatNumber(ach.goal)}`}
+                                </span>
+                                ${ach.unlocked ? `<span class="text-xs bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 px-2 py-1 rounded">+${(ach.bonus * 100)}%</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                elements.achievementsTab.appendChild(achievementEl);
+            });
+        }
+
+        function renderPrestige() {
+            // Update prestige points display
+            elements.prestigePoints.textContent = formatNumber(gameState.prestigePoints);
+            
+            // Clear existing prestige upgrades
+            const container = document.querySelector('#prestige-tab .space-y-2');
+            container.innerHTML = '';
+            
+            // Render prestige upgrades
+            gameState.prestigeUpgrades.forEach(upgrade => {
+                const canAfford = gameState.prestigePoints >= upgrade.cost && !upgrade.purchased;
+                
+                const upgradeEl = document.createElement('div');
+                upgradeEl.className = `prestige-upgrade bg-white dark:bg-gray-700 rounded-lg p-3 shadow-md ${canAfford ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-600' : ''} ${upgrade.purchased ? 'border-l-4 border-purple-500' : ''}`;
+                upgradeEl.innerHTML = `
+            <div class="flex justify-between items-center mb-1">
+                <h3 class="font-semibold">${upgrade.name} <span class="text-sm text-gray-500">${upgrade.purchased ? '(MAX)' : ''}</span></h3>
+                ${upgrade.purchased ? 
+                    '<span class="text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-2 py-1 rounded">Активно</span>' : 
+                    `<span class="text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-2 py-1 rounded"></span>`
+                }
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">${upgrade.description}</p>
+            <div class="flex justify-between items-center">
+                ${upgrade.purchased ? 
+                    '<span class="text-sm text-green-600">Приобретено</span>' : 
+                    `<button class="text-sm font-medium px-3 py-1 rounded ${canAfford ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 dark:bg-gray-600 text-gray-500'}">
+                        Купить (${formatNumber(upgrade.cost)} очков)
+                    </button>`
+                }
+                <div class="w-1/2 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                    <div class="bg-purple-500 h-2 rounded-full" style="width: ${upgrade.purchased ? '100' : '0'}%"></div>
+                </div>
+            </div>
+        `;
+                
+                const buyBtn = upgradeEl.querySelector('button');
+                if (buyBtn && canAfford) {
+                    buyBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        buyPrestigeUpgrade(upgrade.id);
+                    });
+                    upgradeEl.addEventListener('click', () => buyPrestigeUpgrade(upgrade.id));
+                }
+                
+                container.appendChild(upgradeEl);
+            });
+        }
+
+        // Helper function to format numbers
+        function formatNumber(num) {
+            if (num >= 1000000000) return (num / 1000000000000).toFixed(2) + 'T'; 
+            if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
+            if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return Math.floor(num);
+        }
+
+        // Initialize the game when DOM is loaded
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
